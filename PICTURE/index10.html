@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Webcam Streaming</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #3b5998;
+            font-family: Arial, sans-serif;
+            color: #fff;
+        }
+        #videoContainer {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin-bottom: 20px;
+            background-color: #ddd;
+            border-radius: 8px;
+            overflow: hidden;
+        }
+        #videoElement {
+            width: 100%;
+            height: auto;
+            display: block;
+        }
+        #controlButtons {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+        }
+        button {
+            padding: 15px;
+            font-size: 16px;
+            cursor: pointer;
+            border: none;
+            border-radius: 4px;
+            background-color: #4CAF50;
+            color: white;
+            transition: background-color 0.3s ease, transform 0.1s ease;
+        }
+        button:hover {
+            background-color: #45a049;
+        }
+        button:active {
+            transform: scale(0.95);
+        }
+        #loadingSpinner {
+            display: none;
+        }
+        #recoringIndicator {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 20x;
+            height: 20px;
+            border-radius: 50%;
+            background-color: red;
+            display: none;
+            animation: pulse 1s infinite alternate;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+            }
+            100% {
+                transform: scale(1.2);
+            }
+        
+        }
+    </style>
+</head>
+<body>
+    <div id="videoContainer">
+        <video id="videoElement" autoplay muted></video>
+    </div>
+    <div id="controlButtons">
+        <div class="button-group">
+            <button onclick="toggleStream()" style="background-color: #2196F3;"><img src="play.png" alt="Play"></button>
+            <button onclick="toggleAudio()" style="background-color: #673ab7;"><img id="audioIcon" src="mute.png" alt="Mute"></button>
+        </div>
+        <div class="button-group">
+            <button onclick="captureSnapshot()" style="background-color: #e91e63;"><img src="camera.png" alt="Screenshot"></button>
+        </div>
+        <div class="button-group">
+            <button onclick="startRecording()" style="background-color: #ff9800;"><img src="record.png" alt="Record"></button>
+            <button onclick="stopRecording()" style="background-color: #f44336;"><img src="stop.png" alt="Stop"></button>
+        </div>
+    </div>
+    <div id="loadingSpinner">Loading...</div>
+
+    <script>
+        let videoStream = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+
+        async function toggleStream() {
+            const video = document.getElementById('videoElement');
+            const loadingSpinner = document.getElementById('loadingSpinner');
+
+            if (!videoStream) {
+                try {
+                    loadingSpinner.style.display = 'block';
+
+                    videoStream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    video.srcObject = videoStream;
+
+                    loadingSpinner.style.display = 'none';
+
+                    
+                    const permissionsStatus = await navigator.permissions.query({ name: 'camera' });
+                    if (permissionsStatus.state === 'prompt') {
+                        await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                    }
+                } catch (error) {
+                    console.error('Error accessing webcam:', error);
+                    loadingSpinner.style.display = 'none';
+                }
+            } else {
+                video.srcObject = null;
+                videoStream.getTracks().forEach(track => track.stop());
+                videoStream = null;
+            }
+        }
+
+        function captureSnapshot() {
+            const video = document.getElementById('videoElement');
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+
+            const snapshot = canvas.toDataURL('image/png');
+
+            // Create a link element to trigger the download
+            const a = document.createElement('a');
+            a.href = snapshot;
+            a.download = 'screenshot.png';
+            document.body.appendChild(a);
+            a.click();
+
+            // Remove the link element from the DOM
+            document.body.removeChild(a);
+        }
+
+        function startRecording() {
+            if (videoStream) {
+                mediaRecorder = new MediaRecorder(videoStream);
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    document.body.appendChild(a);
+                    a.style = 'display: none';
+                    a.href = url;
+                    a.download = 'recorded-video.webm';
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+
+                    recordedChunks = [];
+                };
+
+                mediaRecorder.start();
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+        }
+    </script>
+</body>
+</html>
